@@ -3,7 +3,7 @@ Python toolbox for Protocol 5 Crediting for outfall gully restoration projects
 
 Included here is the Python Toolbox and the file geodatabase (zipped) containing an empty line feature class template for use with the tool.
 
-Also included are the Expert Panel and MDOT documents for Protocol 5, and an MS Word version of the ReadMe.
+Also included are PDFs of the Expert Panel and MDOT documents for Protocol 5.
 
 # Protocol 5 Tool
 ## Background
