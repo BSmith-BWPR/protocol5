@@ -8,7 +8,7 @@ Also included are PDFs of the Expert Panel and MDOT documents for Protocol 5.
 # Protocol 5 Tool
 ## Background
 
-The Expert Panel document Recommendations for Crediting Outfall and Gully Stabilization Projects in the Chesapeake Bay Watershed defines the crediting mechanism of Protocol 5 (Alternative Prevented Sediment for Outfalls).  This approach accounts for sediment loss through vertical incision at outfalls and gullies.  Credit is estimated by comparing existing channel conditions to modeled equilibrium channel conditions. For more information on the Protocol please review the [Expert Panel guidance](https://www.chesapeakebay.net/channel_files/37043/approval_draft_outfall_restoration_memo_070119.pdf). 
+The Expert Panel document Recommendations for Crediting Outfall and Gully Stabilization Projects in the Chesapeake Bay Watershed defines the crediting mechanism of Protocol 5 (Alternative Prevented Sediment for Outfalls).  This approach accounts for sediment loss through vertical incision at outfalls and gullies.  Credit is estimated by comparing existing channel conditions to modeled equilibrium channel conditions. For more information on the Protocol, please review the [Expert Panel guidance](https://www.chesapeakebay.net/channel_files/37043/approval_draft_outfall_restoration_memo_070119.pdf). 
 
 This python toolbox produces GIS raster and polygon data for the modeled equilibrium channel condition.  Total sediment volume is converted to an annual sediment volume credit, assuming 50% efficiency and a 30 year time window as outlined in the Expert Panel document.
 
