@@ -236,7 +236,7 @@ class P5channelWeqSlope(object):
         
         # if bedtype == "Cohesive" calculate eq. bed slope
         def cohesive_EqBedSlope(DA_ac): 
-            return 0.0028*(DA_ac*247)**-0.33
+            return 0.0028*(DA_ac/247.105)**-0.33
         
         # if bedtype == "Sand and Gravel" calculate eq. bed slope
         def sand_gravel_EqBedSlope(normDepth): 
