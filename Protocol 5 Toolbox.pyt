@@ -771,10 +771,12 @@ class setRasStretch(object):
 
             #use CIM to set custom statistics
             cim_lyr = lyr.getDefinition('V2')
-            cim_lyr.colorizer.statsType = 'GlobalStats'
+            #cim_lyr.colorizer.statsType = 'GlobalStats'
             cim_lyr.colorizer.useCustomStretchMinMax = True
-            cim_lyr.colorizer.stretchStats.min = minVal
-            cim_lyr.colorizer.stretchStats.max = maxVal
+            cim_lyr.colorizer.customStretchMin = minVal
+            cim_lyr.colorizer.customStretchMax = maxVal
+            #cim_lyr.colorizer.stretchStats.min = minVal
+            #cim_lyr.colorizer.stretchStats.max = maxVal
             lyr.setDefinition(cim_lyr)
         
         return
