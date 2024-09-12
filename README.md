@@ -15,7 +15,7 @@ This python toolbox produces GIS raster and polygon data for the modeled equilib
 
 ## Requirements
 
-- ArcGIS Pro 10.x
+- ArcGIS Pro 2.x
 -	Spatial Analyst and 3D Analyst extensions 
 -	Python
 
