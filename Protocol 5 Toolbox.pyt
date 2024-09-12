@@ -1,17 +1,19 @@
 # -*- coding: utf-8 -*-
 '''
 Developed by Brennan Smith and Joshua Thompson (Anne Arundel County BWPR)
+User provides a line feature (use template!) with required p5 fields populated. Creates Equilibrium channel DEM to compare against County DEM.
 
 pwsmit32@aacounty.org
 pwthom19@aacounty.org
 
-2022-06-10      v1.0        Prepared for beta testing
-
+2022-06-10      v2.1        GitHib initial
+2024-06-12      v2.2        Don't allow modeled equilibrium DEM to be higher than existing reference DEM (BS)
 '''
 
 import arcpy
 from arcpy import env
 from arcpy.sa import *
+from arcpy.ia import * 
 import os
 import pandas as pd
 import numpy as np
@@ -27,12 +29,14 @@ class Toolbox(object):
 
 class P5channelWeqSlope(object):
     def __init__(self):
-        self.label = "Protocol 5 Equilibrium Channel"
-        self.description = "Returns the Protocol 5 Equilibrium Channel DEM for Input Line Template"
+        self.label = "Protocol 5 Equilibrium Channel w/ Eq Slope Calc"
+        self.description = "Returns the Protocol 5 Equilibrium Channel DEM for input line template"
         self.canRunInBackground = True
 
     def getParameterInfo(self):
-
+        #Define parameter definitions
+        params = []
+        
         #params[0] 
         in_line = arcpy.Parameter(
             displayName="Input line template",
@@ -49,6 +53,7 @@ class P5channelWeqSlope(object):
             datatype=["GPRasterLayer","DERasterDataset"],
             parameterType="Required",
             direction="Input")
+        in_raster_ref.value = r"https://gis.aacounty.org/image/services/DEM/DEM_2020/ImageServer"
         
         #params[2]
         start_Z = arcpy.Parameter(
@@ -58,7 +63,7 @@ class P5channelWeqSlope(object):
             parameterType="Required",
             direction="Input")
         start_Z.filter.list = ['Segmented (use DEM for initial Z)', 'Continuous (link using fromOID)']
-        start_Z.value = 'Continuous (link using fromOID)'
+        start_Z.value = 'Segmented (use DEM for initial Z)'
         
         #params[3]
         out_ras = arcpy.Parameter(
@@ -67,7 +72,7 @@ class P5channelWeqSlope(object):
             datatype="DERasterDataset",
             parameterType="Required",
             direction="Output")
-        out_ras.value = arcpy.CreateUniqueName("P5_EQ_ras", arcpy.env.workspace)
+        out_ras.value = arcpy.CreateUniqueName("EQraster", arcpy.env.workspace)
         
         #params[4] 
         out_poly = arcpy.Parameter(
@@ -76,7 +81,7 @@ class P5channelWeqSlope(object):
             datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Output")
-        out_poly.value = arcpy.CreateUniqueName("P5_EQ_poly", arcpy.env.workspace)
+        out_poly.value = arcpy.CreateUniqueName("EQpoly", arcpy.env.workspace)
         
         #params[5] 
         flip_check = arcpy.Parameter(
@@ -121,64 +126,54 @@ class P5channelWeqSlope(object):
         return
 
     def updateMessages(self, parameters):
-        # Use dictionary to reference parameters by name instead of index
         p = {p.name: p for p in parameters}
-        
-        # Check that required fields are populated
+           
         if p['in_line'].altered:
             
             in_line =  p['in_line'].value
             reqFields = ['eqBankSlope', 'exBottomWidth', 'exBankHeight','bedType']
             
-            # First, make sure the input is the line template with all the fields in there
-            allFields = ['fromOID', 'exBottomWidth', 'exBankHeight', 'exBedSlope', 'bedType', 'eqBankSlope', 'eqBedSlope', 'drainageAcres', 'exBankSlope', 'manningsN', 'flowRate', 'initialValDepth', 'shieldsParam', 'critBedParam', 'chanFormDischperUnitWidth', 'designDisch', 'meanGrainSize', 'medGrainSize', 'Z_Min', 'Z_Max']
-            inFields  = [f.name for f in arcpy.ListFields(in_line)]
-            if not all(item in inFields for item in allFields):
-                p['in_line'].setErrorMessage('Input feature class missing required fields. Please use template provided')
-            
-            else:
-            
-                # Throw a warning if exBedSlope values are missing
-                exBeds = [row[0] for row in arcpy.da.SearchCursor(in_line,'exBedSlope')]
-                if not all(exBeds):
-                    p['in_line'].setWarningMessage('Missing existing bed slope values will be computed from DEM')
-                    msgFlag=1
-                    
-                # loop through each input row, check bed type, update required field list, and populate message string if missing data
-                msg = ''
-                with arcpy.da.SearchCursor(in_line, [arcpy.Describe(in_line).OIDFieldName,'bedType']) as cursor:
-                    for row in cursor:
-                        checkFields = reqFields.copy()
-                        bedType = row[1]
-                        if bedType == 'Custom':
-                            checkFields.append('eqBedSlope')
-                        elif bedType == 'Cohesive':
-                            checkFields.append('drainageAcres')                        
-                        elif bedType == 'Sand and Gravel':
-                            checkFields.extend(['manningsN', 'flowRate', 'initialValDepth', 'exBankSlope'])
-                        elif bedType == 'Coarser Than Sand': 
-                            checkFields.extend(['manningsN','shieldsParam', 'critBedParam','chanFormDischperUnitWidth','designDisch','meanGrainSize','medGrainSize'])
-                        
-                        # now check that all the required fields have values
-                        getRow = [r for r in arcpy.da.SearchCursor(in_line,checkFields,where_clause = arcpy.Describe(in_line).OIDFieldName+"="+str(row[0]))][0]
-                        if not all(getRow):
-                            missingFields = [checkFields[f] for f in [i for i,x in enumerate(getRow) if not x]]
-                            msg += 'Input feature {} has zero or missing values for required fields: {} \n'.format(row[0],missingFields)
+            # Throw a warning if exBedSlope values are missing
+            exBeds = [row[0] for row in arcpy.da.SearchCursor(in_line,'exBedSlope')]
+            if not all(exBeds):
+                p['in_line'].setWarningMessage('Missing existing bed slope values will be computed from DEM')
+                msgFlag=1
                 
-                if len(msg) > 0:
-                    p['in_line'].setErrorMessage(msg)
+            # loop through each input row, check bed type, update required field list, and populate message string if missing data
+            msg = ''
+            with arcpy.da.SearchCursor(in_line, [arcpy.Describe(in_line).OIDFieldName,'bedType']) as cursor:
+                for row in cursor:
+                    checkFields = reqFields.copy()
+                    bedType = row[1]
+                    if bedType == 'Custom':
+                        checkFields.append('eqBedSlope')
+                    elif bedType == 'Cohesive':
+                        checkFields.append('drainageAcres')                        
+                    elif bedType == 'Sand and Gravel':
+                        checkFields.extend(['manningsN', 'flowRate', 'initialValDepth', 'exBankSlope'])
+                    elif bedType == 'Coarser Than Sand': 
+                        checkFields.extend(['manningsN','shieldsParam', 'critBedParam','chanFormDischperUnitWidth','designDisch','meanGrainSize','medGrainSize'])
                     
-                # Throw a warning if fromOID is empty and the Continuous option is turned on    
-                if p['start_Z'].value == 'Continuous (link using fromOID)':
-                    oids = [row[0] for row in arcpy.da.SearchCursor(in_line,'fromOID')]
-                    if not any(oids):
-                        p['start_Z'].setWarningMessage('No values found for field [fromOID]. Reach elevation will not be continuous')
+                    # now check that all the required fields have values
+                    getRow = [r for r in arcpy.da.SearchCursor(in_line,checkFields,where_clause = arcpy.Describe(in_line).OIDFieldName+"="+str(row[0]))][0]
+                    if not all(getRow):
+                        missingFields = [checkFields[f] for f in [i for i,x in enumerate(getRow) if not x]]
+                        msg += 'Input feature {} has zero or missing values for required fields: {} \n'.format(row[0],missingFields)
             
-                # If calc_eq is unchecked, make sure there are eqBedSlope values available.
-                if p['calc_eq'].value is False:
-                    eqBeds = [row[0] for row in arcpy.da.SearchCursor(in_line,'eqBedSlope')]
-                    if not all(eqBeds):
-                        p['calc_eq'].setWarningMessage('Missing equilibrium bed slope values will be calculated anyway')
+            if len(msg) > 0:
+                p['in_line'].setErrorMessage(msg)
+                
+            # Throw a warning if fromOID is empty and the Continuous option is turned on    
+            if p['start_Z'].value == 'Continuous (link using fromOID)':
+                oids = [row[0] for row in arcpy.da.SearchCursor(in_line,'fromOID')]
+                if not any(oids):
+                    p['start_Z'].setWarningMessage('No values found for field [fromOID]. Reach elevation will not be continuous')
+        
+            # If calc_eq is unchecked, make sure there are eqBedSlope values available.
+            if p['calc_eq'].value is False:
+                eqBeds = [row[0] for row in arcpy.da.SearchCursor(in_line,'eqBedSlope')]
+                if not all(eqBeds):
+                    p['calc_eq'].setWarningMessage('Missing equilibrium bed slope values will be calculated anyway')
         
         return
 
@@ -642,9 +637,11 @@ class P5channelWeqSlope(object):
         tempPt = arcpy.CreateUniqueName("ptFromRas", arcpy.env.scratchGDB)
         del_list.append(tempPt)
         arcpy.conversion.RasterToPoint(tempExtract, tempPt)
+        tempIDW     = arcpy.CreateUniqueName("tempIDW", arcpy.env.scratchGDB)
+        del_list.append(tempIDW)
         with arcpy.EnvManager(snapRaster=in_raster_ref, mask=out_poly):
             # for some reason, SA idw doesn't let you set output raster name, but 3d idw does.
-            arcpy.ddd.Idw(tempPt, "grid_code", out_ras, cell_size=1)
+            arcpy.ddd.Idw(tempPt, "grid_code", tempIDW, cell_size=1)
             
         ## Zonal stats - erosion credit over 30 years (50% efficiency)
         # Project / Resample input DEM to 1 foot grid, snapped and masked to our final raster output
@@ -653,8 +650,11 @@ class P5channelWeqSlope(object):
         tempMinus   = arcpy.CreateUniqueName("tempMinus", arcpy.env.scratchGDB)
         del_list.append(tempDEM)
         del_list.append(tempMinus)
-        with arcpy.EnvManager(snapRaster = out_ras, cellSize = 1, extent = out_poly, mask = out_poly):
-            arcpy.management.ProjectRaster(in_raster_ref, tempDEM, arcpy.SpatialReference(2893), 'BILINEAR', 1)
+        with arcpy.EnvManager(snapRaster = tempIDW, cellSize = 1, extent = out_poly, mask = out_poly):
+            arcpy.management.ProjectRaster(in_raster_ref, tempDEM, arcpy.SpatialReference(2893), 'BILINEAR', "1")
+            #Get minimum value of the two rasters (to prevent modeled elevation being above existing elevation)
+            min_raster = Min([tempIDW,tempDEM])
+            min_raster.save(out_ras)
             # Subtract eq raster from this DEM
             arcpy.ddd.Minus(tempDEM, out_ras, tempMinus)
         
@@ -677,6 +677,7 @@ class P5channelWeqSlope(object):
         messages.addMessage('Script Complete!')
         
         return
+
 
 
 class setRasStretch(object):
